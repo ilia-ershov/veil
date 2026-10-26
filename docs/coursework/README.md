@@ -6,8 +6,6 @@
 | --- | --- |
 | [application.md](application.md) | Заявка на проект: проблема, решение, план |
 | [user-scenarios.md](user-scenarios.md) | Пользовательские сценарии |
-| [report.doc](report.doc) | Отчёт по ИВР |
-| [drafts/](drafts/) | Первые версии заявки и сценариев |
 
 ## Этапы сдачи
 

@@ -5,13 +5,13 @@
   <img src="docs/logo.svg" width="72" height="72" alt="">
 </picture>
 
-# Mail Organizer
+# Veil
 
 **A separate random email address for every website, forwarded to your real inbox and switched off in one click.**
 
 *Организатор почты* · the interface is in Russian
 
-[![CI](https://github.com/ilia-ershov/iershov_application/actions/workflows/ci.yml/badge.svg)](https://github.com/ilia-ershov/iershov_application/actions/workflows/ci.yml)
+[![CI](https://github.com/ilia-ershov/veil/actions/workflows/ci.yml/badge.svg)](https://github.com/ilia-ershov/veil/actions/workflows/ci.yml)
 ![Python 3.13](https://img.shields.io/badge/Python-3.13-3776ab?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
