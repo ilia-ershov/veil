@@ -11,6 +11,14 @@ from flask import current_app
 log = logging.getLogger(__name__)
 
 
+def notify(to, subject, body):
+    """Security notifications are best effort: a mail outage must not undo the change they report."""
+    try:
+        send_email(to, subject, body)
+    except Exception:
+        log.exception("Could not send notification email")
+
+
 def send_email(to, subject, body):
     config = current_app.config
     backend = config["MAIL_BACKEND"]

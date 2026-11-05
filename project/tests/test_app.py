@@ -82,3 +82,16 @@ def test_code_requests_are_rate_limited(app_factory):
         client.post("/api/auth/request-code", json={"email": f"user{i}@example.com"}).status_code for i in range(6)
     ]
     assert statuses == [200] * 5 + [429]
+
+
+def test_code_requests_are_limited_per_address_across_ips(app_factory):
+    client = app_factory(RATELIMIT_ENABLED=True).test_client()
+
+    def request_code(email, ip):
+        return client.post(
+            "/api/auth/request-code", json={"email": email}, environ_base={"REMOTE_ADDR": ip}
+        ).status_code
+
+    statuses = [request_code("victim@example.com", f"198.51.100.{i}") for i in range(11)]
+    assert statuses == [200] * 10 + [429]
+    assert request_code("other@example.com", "198.51.100.99") == 200  # other addresses are unaffected

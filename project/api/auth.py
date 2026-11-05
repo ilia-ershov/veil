@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from errors import ApiError, bad_request, conflict, unauthorized
 from extensions import db, limiter
-from mailer import send_email
+from mailer import notify, send_email
 from models import EmailVerification, User, as_utc, utcnow
 from security import (
     MFA,
@@ -52,13 +52,28 @@ def failed_auth(response):
     return response.status_code in (400, 401, 403)
 
 
+def code_sent(response):
+    return response.status_code == 200
+
+
+def _requested_email():
+    data = request.get_json(silent=True)
+    email = data.get("email") if isinstance(data, dict) else None
+    return email.strip().lower()[:254] if isinstance(email, str) else ""
+
+
 # Per-IP limits alone let a botnet try passwords or 2FA codes against one account without end,
 # so failures are also counted per account, whichever addresses they come from.
 def login_account_key():
-    data = request.get_json(silent=True)
-    email = data.get("email") if isinstance(data, dict) else None
-    email = email.strip().lower()[:254] if isinstance(email, str) else ""
+    email = _requested_email()
     return f"login-account:{email}" if email else get_remote_address()
+
+
+# Likewise, codes are counted per destination address: a botnet must not be able to flood one
+# inbox with codes (hurting the sender's reputation too), nor get unlimited fresh codes to guess.
+def code_address_key():
+    email = _requested_email()
+    return f"code-address:{email}" if email else get_remote_address()
 
 
 def mfa_account_key():
@@ -115,6 +130,7 @@ def _resend_too_soon(seconds):
 
 @bp.post("/request-code")
 @limiter.limit("5 per minute;30 per hour")
+@limiter.limit("10 per hour", key_func=code_address_key, deduct_when=code_sent)
 def request_code():
     data = get_json()
     email = require_external_email(normalize_email(data.get("email")))
@@ -262,4 +278,11 @@ def reset_password():
     user.password_hash = hash_password(password)
     user.token_version += 1  # signs out every existing session
     db.session.commit()
+    notify(
+        user.email,
+        "Пароль сброшен",
+        f"Пароль вашего аккаунта на {current_app.config['MAIL_DOMAIN']} сброшен по коду из письма, "
+        "все сеансы завершены.\n\nЕсли это сделали не вы, кто-то имеет доступ к этому почтовому ящику: "
+        "смените пароль от него, затем снова восстановите пароль аккаунта.",
+    )
     return jsonify(message="Password updated")

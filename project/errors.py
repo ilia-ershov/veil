@@ -48,7 +48,10 @@ _HTTP_CODES = {
 def register_error_handlers(app):
     @app.errorhandler(ApiError)
     def handle_api_error(error):
-        return jsonify(error=error.message, code=error.code, **error.extra), error.status
+        response = jsonify(error=error.message, code=error.code, **error.extra)
+        if "retry_after" in error.extra:
+            response.headers["Retry-After"] = str(error.extra["retry_after"])
+        return response, error.status
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
