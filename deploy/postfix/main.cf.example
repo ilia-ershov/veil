@@ -1,6 +1,6 @@
 # Additions to /etc/postfix/main.cf for receiving mail for the alias domain and forwarding it.
-# The MX record of w3r4kl.ru must point at this server.
-virtual_alias_domains = w3r4kl.ru
+# The MX record of veil.ershov.me must point at this server.
+virtual_alias_domains = veil.ershov.me
 virtual_alias_maps = pgsql:/etc/postfix/pgsql-aliases.cf
 
 # Forwarded mail keeps the original sender, which breaks SPF at the destination.

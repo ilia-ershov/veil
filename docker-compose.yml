@@ -28,7 +28,7 @@ services:
     environment:
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       DATABASE_URL: postgresql://mail_organizer:${POSTGRES_PASSWORD}@db:5432/mail_organizer
-      MAIL_DOMAIN: ${MAIL_DOMAIN:-w3r4kl.ru}
+      MAIL_DOMAIN: ${MAIL_DOMAIN:-veil.ershov.me}
       MAIL_BACKEND: ${MAIL_BACKEND:-console}
       MAIL_FROM: ${MAIL_FROM:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -51,7 +51,7 @@ services:
     build:
       context: ./project/front
       args:
-        VITE_MAIL_DOMAIN: ${MAIL_DOMAIN:-w3r4kl.ru}
+        VITE_MAIL_DOMAIN: ${MAIL_DOMAIN:-veil.ershov.me}
     ports:
       - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:80"
     depends_on:

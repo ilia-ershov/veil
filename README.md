@@ -31,7 +31,7 @@
 
 ## Why
 
-You sign up somewhere with `x7k2m9q4ab@w3r4kl.ru` instead of your real address. Mail sent to it lands in your inbox as usual. When that site leaks its database or starts sending spam, you switch that one address off and nothing else changes.
+You sign up somewhere with `x7k2m9q4ab@veil.ershov.me` instead of your real address. Mail sent to it lands in your inbox as usual. When that site leaks its database or starts sending spam, you switch that one address off and nothing else changes.
 
 - Your real address is never handed to third parties.
 - A leaked database can't be cross-referenced to find out where else you are registered.
@@ -139,7 +139,7 @@ Backend settings come from environment variables or `project/.env` (see [`projec
 | --- | --- | --- |
 | `SECRET_KEY` | — (required) | Signs tokens and HMACs; at least 32 random characters |
 | `DATABASE_URL` | — (required) | `postgresql://user:password@host/db` |
-| `MAIL_DOMAIN` | `w3r4kl.ru` | Domain of the forwarding addresses |
+| `MAIL_DOMAIN` | `veil.ershov.me` | Domain of the forwarding addresses |
 | `MAIL_BACKEND` | `console` | `console` (log messages) or `smtp` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS`, `SMTP_SSL`, `MAIL_FROM` | | Outgoing mail |
 | `RATELIMIT_STORAGE_URI` | `memory://` | Use `redis://…` when running several workers |
@@ -161,7 +161,7 @@ The frontend reads `VITE_MAIL_DOMAIN` and, for split deployments only, `VITE_API
 1. Point the MX record of the alias domain at the mail server and install `postfix` and `postfix-pgsql`.
 2. Create the read-only lookup role: `psql -d mail_organizer -f deploy/postfix/lookup-role.sql` (change the password first).
 3. Copy [`deploy/postfix/pgsql-aliases.cf`](deploy/postfix/pgsql-aliases.cf) to `/etc/postfix/` and add the lines from [`deploy/postfix/main.cf.example`](deploy/postfix/main.cf.example) to `main.cf`.
-4. Check the lookup with `postmap -q abc123def4@w3r4kl.ru pgsql:/etc/postfix/pgsql-aliases.cf`, then `postfix reload`.
+4. Check the lookup with `postmap -q abc123def4@veil.ershov.me pgsql:/etc/postfix/pgsql-aliases.cf`, then `postfix reload`.
 
 Forwarded mail keeps the original sender, so use SRS (for example `postsrsd`) to keep it from failing SPF at the destination.
 

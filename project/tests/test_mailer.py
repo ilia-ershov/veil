@@ -47,7 +47,7 @@ def test_smtp_with_starttls_and_login(app_factory, fake_smtp):
         SMTP_PORT=587,
         SMTP_USERNAME="bot",
         SMTP_PASSWORD="pw",
-        MAIL_FROM="no-reply@w3r4kl.ru",
+        MAIL_FROM="no-reply@veil.ershov.me",
     )
     send_email("user@example.com", "Код подтверждения", "Ваш код: 123456")
 
@@ -55,12 +55,12 @@ def test_smtp_with_starttls_and_login(app_factory, fake_smtp):
     assert (server.host, server.port) == ("mail.example.com", 587)
     assert server.calls == ["starttls", ("login", "bot", "pw"), "send", "quit"]
     message = server.messages[0]
-    assert message["From"] == "no-reply@w3r4kl.ru"
+    assert message["From"] == "no-reply@veil.ershov.me"
     assert message["To"] == "user@example.com"
     assert message["Subject"] == "Код подтверждения"
     assert "123456" in message.get_content()
     # Gmail rejects messages without these headers
-    assert message["Message-ID"].startswith("<") and message["Message-ID"].endswith("@w3r4kl.ru>")
+    assert message["Message-ID"].startswith("<") and message["Message-ID"].endswith("@veil.ershov.me>")
     assert message["Date"]
 
 

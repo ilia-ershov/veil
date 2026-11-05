@@ -6,6 +6,6 @@ user = postfix_lookup
 password = change-me
 dbname = mail_organizer
 # only look up addresses in this domain
-domain = w3r4kl.ru
+domain = veil.ershov.me
 # %u is the (escaped) local part of the recipient address
 query = SELECT u.email FROM aliases a JOIN users u ON u.uuid = a.user_id WHERE a.local_part = '%u' AND a.is_active

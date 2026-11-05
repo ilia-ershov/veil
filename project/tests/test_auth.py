@@ -232,8 +232,11 @@ def test_ordinary_addresses_are_accepted(client, email):
     assert client.post("/api/auth/request-code", json={"email": email}).status_code == 200
 
 
-def test_alias_domain_cannot_be_main_address(client):
-    response = client.post("/api/auth/request-code", json={"email": "abc@w3r4kl.ru"})
+@pytest.mark.parametrize("address", ["abc@{domain}", "abc@sub.{domain}", "ABC@{domain_upper}"])
+def test_alias_domain_cannot_be_main_address(client, app, address):
+    domain = app.config["MAIL_DOMAIN"]
+    email = address.format(domain=domain, domain_upper=domain.upper())
+    response = client.post("/api/auth/request-code", json={"email": email})
     assert response.status_code == 400
     assert response.get_json()["code"] == "alias_domain_email"
 

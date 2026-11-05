@@ -45,7 +45,7 @@ def normalize_database_url(url):
 
 
 def load_config():
-    mail_domain = _str("MAIL_DOMAIN", "w3r4kl.ru").lower()
+    mail_domain = _str("MAIL_DOMAIN", "veil.ershov.me").lower()
     return {
         "SECRET_KEY": os.getenv("SECRET_KEY", ""),
         "SQLALCHEMY_DATABASE_URI": normalize_database_url(os.getenv("DATABASE_URL", "")),
