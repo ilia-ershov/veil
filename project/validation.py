@@ -12,6 +12,8 @@ from errors import bad_request
 # recipients, and smtplib splits the To header the same way, so "root,me@gmail.com" would also
 # deliver to root@<the server's domain>.
 EMAIL_RE = re.compile(r"[\w!#$%&'*+/=?^`{|}~.-]+@[\w-]+(?:\.[\w-]+)+")  # used with fullmatch
+# The part before @MAIL_DOMAIN of a forwarding address (security.generate_alias_local_part).
+ALIAS_LOCAL_PART_RE = re.compile(r"[a-z0-9]{1,64}")  # used with fullmatch
 MAX_EMAIL_LENGTH = 254
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_BYTES = 72  # bcrypt ignores everything after 72 bytes

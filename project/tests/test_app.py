@@ -2,6 +2,7 @@
 
 import pytest
 
+from config import load_config
 from conftest import make_app
 
 
@@ -14,6 +15,17 @@ def test_weak_secret_key_is_refused(secret):
 def test_missing_database_url_is_refused():
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         make_app(SQLALCHEMY_DATABASE_URI="")
+
+
+def test_a_malformed_number_names_its_setting(monkeypatch):
+    monkeypatch.setenv("TRUST_PROXY", "two")
+    with pytest.raises(RuntimeError, match="TRUST_PROXY"):
+        load_config()
+
+
+def test_unknown_mail_backend_is_refused():
+    with pytest.raises(RuntimeError, match="'smpt'"):
+        make_app(MAIL_BACKEND="smpt")
 
 
 def test_health(client):
@@ -95,3 +107,12 @@ def test_code_requests_are_limited_per_address_across_ips(app_factory):
     statuses = [request_code("victim@example.com", f"198.51.100.{i}") for i in range(11)]
     assert statuses == [200] * 10 + [429]
     assert request_code("other@example.com", "198.51.100.99") == 200  # other addresses are unaffected
+
+
+def test_rate_limits_keep_working_while_redis_is_down(app_factory):
+    # Nothing listens on port 1, so every storage call fails: the limiter has to fall back to memory
+    # instead of turning each login into a 500.
+    client = app_factory(RATELIMIT_ENABLED=True, RATELIMIT_STORAGE_URI="redis://127.0.0.1:1/0").test_client()
+    body = {"email": "a@example.com", "password": "Wrong-pass1"}
+    statuses = [client.post("/api/auth/login", json=body).status_code for _ in range(11)]
+    assert statuses == [401] * 10 + [429]

@@ -22,10 +22,13 @@ def _str(name, default=""):
 
 
 def _int(name, default):
-    value = os.getenv(name)
-    if value is None or value.strip() == "":
+    value = os.getenv(name, "").strip()
+    if not value:
         return default
-    return int(value)
+    try:
+        return int(value)
+    except ValueError:
+        raise RuntimeError(f"{name} must be a whole number, got {value!r}") from None
 
 
 def _list(name):
@@ -79,6 +82,8 @@ def load_config():
         "SMTP_TIMEOUT": _int("SMTP_TIMEOUT", 10),
         "RATELIMIT_ENABLED": _bool("RATELIMIT_ENABLED", True),
         "RATELIMIT_STORAGE_URI": _str("RATELIMIT_STORAGE_URI", "memory://"),
+        # While Redis is unreachable each worker keeps counting in memory instead of failing requests.
+        "RATELIMIT_IN_MEMORY_FALLBACK_ENABLED": True,
         "RATELIMIT_HEADERS_ENABLED": True,
     }
 
@@ -94,4 +99,6 @@ def validate_config(config):
     if not config.get("SQLALCHEMY_DATABASE_URI"):
         raise RuntimeError("DATABASE_URL must be set, e.g. postgresql://user:password@localhost/mail_organizer")
     if config.get("MAIL_BACKEND") not in {"console", "smtp", "memory"}:
-        raise RuntimeError("MAIL_BACKEND must be 'console' or 'smtp'")
+        raise RuntimeError(
+            f"MAIL_BACKEND must be 'console' or 'smtp' ('memory' is for the tests), got {config.get('MAIL_BACKEND')!r}"
+        )

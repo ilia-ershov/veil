@@ -1,7 +1,5 @@
 """Forwarding addresses (aliases): generate, create, list, edit, deactivate, reactivate and delete."""
 
-import re
-
 import jwt
 from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy.exc import IntegrityError
@@ -10,11 +8,10 @@ from errors import ApiError, bad_request, conflict, not_found
 from extensions import db, limiter
 from models import Alias, RetiredAlias, utcnow
 from security import ALIAS, create_token, decode_token, generate_alias_local_part, login_required
-from validation import MAX_SERVICE_LENGTH, get_json, get_str, normalize_service_url
+from validation import ALIAS_LOCAL_PART_RE, MAX_SERVICE_LENGTH, get_json, get_str, normalize_service_url
 
 bp = Blueprint("aliases", __name__, url_prefix="/aliases")
 
-LOCAL_PART_RE = re.compile(r"^[a-z0-9]{1,64}$")
 STATUS_FILTERS = {"all": None, "active": True, "inactive": False}
 
 
@@ -91,7 +88,7 @@ def create_alias():
         not claims
         or claims["sub"] != str(g.user.uuid)
         or not isinstance(local_part, str)
-        or not LOCAL_PART_RE.match(local_part)
+        or not ALIAS_LOCAL_PART_RE.fullmatch(local_part)
     ):
         raise bad_request("invalid_alias_token", "The generated address has expired, please generate a new one")
 

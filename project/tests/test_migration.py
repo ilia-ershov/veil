@@ -9,7 +9,7 @@ from sqlalchemy import inspect, text
 from conftest import PASSWORD, TEST_DATABASE_URL
 from database import migrate_legacy
 from extensions import db
-from models import Alias, User
+from models import Alias, RetiredAlias, User
 from security import hash_password
 
 pytestmark = pytest.mark.skipif(
@@ -98,3 +98,16 @@ def test_login_works_after_migration(app, client, legacy_db):
     migrate_legacy()
     response = client.post("/api/auth/login", json={"email": "alice@example.com", "password": PASSWORD})
     assert response.status_code == 200
+
+
+def test_a_rerun_does_not_bring_back_deleted_aliases(app, legacy_db):
+    migrate_legacy()
+    deleted = db.session.query(Alias).filter_by(local_part="old0000000").one()
+    db.session.add(RetiredAlias(local_part=deleted.local_part))  # what DELETE /api/aliases/<id> does
+    db.session.delete(deleted)
+    db.session.commit()
+
+    report = migrate_legacy()
+    assert report["copied"] == 0
+    assert report["deleted_since"] == 1
+    assert db.session.query(Alias).filter_by(local_part="old0000000").count() == 0

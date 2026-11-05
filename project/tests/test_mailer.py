@@ -61,7 +61,7 @@ def test_smtp_with_starttls_and_login(app_factory, fake_smtp):
     assert "123456" in message.get_content()
     # Gmail rejects messages without these headers
     assert message["Message-ID"].startswith("<") and message["Message-ID"].endswith("@veil.ershov.me>")
-    assert message["Date"]
+    assert message["Date"].endswith("+0000")
 
 
 def test_smtp_over_ssl_without_auth(app_factory, fake_smtp):
