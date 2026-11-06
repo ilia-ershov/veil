@@ -38,8 +38,16 @@ services:
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_SSL: ${SMTP_SSL:-false}
       TRUST_PROXY: ${TRUST_PROXY:-1}
+      # optional; empty means the default from project/config.py
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-}
+      MAX_ALIASES_PER_USER: ${MAX_ALIASES_PER_USER:-}
+      TOTP_ISSUER: ${TOTP_ISSUER:-}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-3}  # gunicorn itself crashes on an empty value
       RATELIMIT_STORAGE_URI: redis://redis:6379/0
       AUTO_INIT_DB: "false"
+    # Runs as an unprivileged user and needs no capabilities at all.
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       db:
         condition: service_healthy
@@ -57,6 +65,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    # nginx's master starts as root and only drops privileges: setuid binaries are never needed.
+    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
 volumes:
