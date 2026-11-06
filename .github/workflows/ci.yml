@@ -1,8 +1,18 @@
 name: CI
 
+# Pull requests are tested as PRs and main after the merge: a branch with an open PR is not run twice.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
@@ -54,7 +64,11 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
-      - run: npm audit --audit-level=moderate
+      # Whatever ships to the browser must be clean. The build and lint tools only fail the job on
+      # high and critical advisories: a moderate one there (e.g. a glob DoS in eslint, which only
+      # reads our own patterns) is not exploitable and often has no fix yet.
+      - run: npm audit --omit=dev --audit-level=moderate
+      - run: npm audit --audit-level=high
 
   live:
     # The production stack (nginx + gunicorn + PostgreSQL + Redis), tested over HTTP and in a real browser.
