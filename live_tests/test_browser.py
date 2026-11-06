@@ -159,7 +159,7 @@ def test_complete_user_journey(base_url, browser_page, mailbox, new_email):
         page.get_by_role("button", name="Включить", exact=True).click()
         expect(page.locator(".codes code")).to_have_count(10)
         recovery_codes = page.locator(".codes code").all_inner_texts()
-        page.get_by_role("button", name="Я сохранил коды").click()
+        page.get_by_role("button", name="Коды сохранены").click()
         expect(page.get_by_text("Осталось кодов восстановления: 10.")).to_be_visible()
 
     with step(page, "log in again: wrong password, replayed TOTP code, recovery code"):

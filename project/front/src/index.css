@@ -794,6 +794,15 @@ input:focus {
     justify-content: flex-start;
     margin-left: 0.45rem;
   }
+
+  /* the date gets its own line instead of wrapping behind a dangling separator */
+  .alias-meta {
+    flex-basis: 100%;
+  }
+
+  .alias-service > .alias-meta::before {
+    content: none;
+  }
 }
 
 .generated {

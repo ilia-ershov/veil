@@ -1,6 +1,7 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import Notice from '../components/Notice'
 import { MAIL_DOMAIN } from '../config'
+import { useFlashMessage } from '../flash'
 
 // What the dashboard looks like after a few registrations (made-up addresses).
 const DEMO = [
@@ -25,10 +26,10 @@ const FEATURES = [
 ]
 
 export default function Home() {
-  const location = useLocation()
+  const message = useFlashMessage()
   return (
     <div className="stack">
-      <Notice type="success">{location.state?.message}</Notice>
+      <Notice type="success">{message}</Notice>
       <section className="hero">
         <div>
           <h1>Отдельный адрес почты для каждого сайта</h1>

@@ -4,12 +4,14 @@ import { authApi } from '../api'
 import { setToken } from '../auth'
 import Notice from '../components/Notice'
 import PasswordField from '../components/PasswordField'
+import { useFlashMessage } from '../flash'
 import { errorMessage } from '../messages'
 
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const [params] = useSearchParams()
+  const flash = useFlashMessage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [mfaToken, setMfaToken] = useState('')
@@ -17,7 +19,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const info = location.state?.message || (params.get('expired') ? 'Сеанс завершён. Войдите снова.' : '')
+  const info = flash || (params.get('expired') ? 'Сеанс завершён. Войдите снова.' : '')
 
   const finish = (token) => {
     setToken(token)
