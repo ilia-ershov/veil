@@ -23,7 +23,8 @@
 #   11. fail2ban            ban SSH / SMTP brute force
 #   12. updates             automatic security updates
 #   13. ssh                 key-only SSH (only if a key is installed)
-#   14. backup              daily backup of the database, secrets and config (deploy/backup.sh)
+#   14. backup              daily backup of the database, secrets and config (deploy/backup.sh);
+#                           a failed run is mailed to root
 #   15. summary             DNS records to create, what to ask the hosting provider
 #
 #  Usage:
@@ -255,20 +256,24 @@ step_postfix() {
   backup_once /etc/postfix/main.cf
   backup_once /etc/postfix/master.cf
 
+  # Mail for root (cron, updates, failed backups) goes to the first personal address. Postfix
+  # completes "root" to root@$DOMAIN (myorigin), a virtual alias domain, so the entry has to be in
+  # /etc/postfix/virtual: /etc/aliases only covers root@localhost.
+  local root_target="${PERSONAL_ADDRESSES%% *}@$DOMAIN"
+  [ -n "${PERSONAL_ADDRESSES}" ] || root_target="$FORWARD_TO"
+
   # Personal and role addresses. The service's aliases come from the database (step 3).
   {
     echo "# Personal and role addresses (aliases of the service are looked up in the database)"
     for local in $PERSONAL_ADDRESSES postmaster abuse; do
       echo "$local@$DOMAIN    $FORWARD_TO"
     done
+    echo "root@$DOMAIN    $root_target"
     echo "postmaster@$SERVICE_DOMAIN    $FORWARD_TO"
     echo "abuse@$SERVICE_DOMAIN    $FORWARD_TO"
   } > /etc/postfix/virtual
   postmap /etc/postfix/virtual
 
-  # mail for root (cron, updates) goes to the first personal address
-  local root_target="${PERSONAL_ADDRESSES%% *}@$DOMAIN"
-  [ -n "${PERSONAL_ADDRESSES}" ] || root_target="$FORWARD_TO"
   if grep -q '^root:' /etc/aliases; then
     sed -i "s|^root:.*|root: $root_target|" /etc/aliases
   else
@@ -462,8 +467,8 @@ EOF
 # -------------------------------------------------------------------------------------
 step_postfix_tls() {
   log "10. Postfix TLS certificate"
-  local dir="" i
-  for i in $(seq 1 30); do   # wait up to ~5 min for Caddy (needs working DNS)
+  local dir=""
+  for _ in $(seq 1 30); do   # wait up to ~5 min for Caddy (needs working DNS)
     dir=$(find /var/lib/caddy/.local/share/caddy/certificates -type d -name "$MAIL_HOST" 2>/dev/null | head -1 || true)
     [ -n "$dir" ] && [ -f "$dir/$MAIL_HOST.crt" ] && break
     dir=""
@@ -577,10 +582,20 @@ step_backup() {
 Description=Mail Organizer backup (database, secrets, config)
 After=docker.service
 Requires=docker.service
+# a failed run is mailed to root: unnoticed, it once failed every night for two weeks
+OnFailure=mail-organizer-backup-failed.service
 
 [Service]
 Type=oneshot
 ExecStart=$DEPLOY_DIR/backup.sh
+UNIT
+  cat > /etc/systemd/system/mail-organizer-backup-failed.service <<'UNIT'
+[Unit]
+Description=Mail root that the Mail Organizer backup failed
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '{ echo "To: root"; echo "Subject: Backup failed on %H"; echo; journalctl -u mail-organizer-backup.service -n 40 --no-pager; } | /usr/sbin/sendmail root'
 UNIT
   cat > /etc/systemd/system/mail-organizer-backup.timer <<'UNIT'
 [Unit]
