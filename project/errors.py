@@ -5,6 +5,8 @@ import logging
 from flask import jsonify
 from werkzeug.exceptions import HTTPException
 
+from extensions import db
+
 log = logging.getLogger(__name__)
 
 
@@ -48,6 +50,9 @@ _HTTP_CODES = {
 def register_error_handlers(app):
     @app.errorhandler(ApiError)
     def handle_api_error(error):
+        # A refused request changes nothing it has not committed itself, e.g. a 2FA code checked
+        # before a later step failed stays unused.
+        db.session.rollback()
         response = jsonify(error=error.message, code=error.code, **error.extra)
         if "retry_after" in error.extra:
             response.headers["Retry-After"] = str(error.extra["retry_after"])
@@ -67,4 +72,8 @@ def register_error_handlers(app):
     def handle_unexpected_error(error):
         # Details go to the server log only; clients never see stack traces or SQL.
         log.exception("Unhandled error")
+        try:
+            db.session.rollback()
+        except Exception:  # the database itself may be what failed
+            log.exception("Rollback failed")
         return jsonify(error="Internal server error", code="internal_error"), 500

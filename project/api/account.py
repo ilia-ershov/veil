@@ -60,6 +60,16 @@ def _require_password(data, field="password"):
         raise ApiError(403, "invalid_password", "Wrong password", field=field)
 
 
+def _require_second_factor(data):
+    """With 2FA on, a fresh TOTP or recovery code is needed too: a password alone (phished, or typed
+    on someone else's computer) must not be enough to move all forwarded mail. The code is used up
+    only if the change is committed."""
+    user = g.user
+    db.session.refresh(user, with_for_update=True)  # parallel requests cannot reuse one code
+    if not verify_second_factor(user, data.get("code")):
+        raise ApiError(403, "invalid_mfa_code", "Invalid authentication code", field="code")
+
+
 @bp.get("")
 @login_required
 def get_account():
@@ -73,6 +83,8 @@ def get_account():
 def change_email():
     data = get_json()
     _require_password(data)
+    if g.user.mfa_enabled:
+        _require_second_factor(data)
     email = require_external_email(normalize_email(data.get("email")))
     check_verification_token(data.get("verification_token"), email, "change_email")
 
@@ -197,8 +209,7 @@ def disable_2fa():
     user = g.user
     if not user.mfa_enabled:
         return jsonify(user=user.to_dict())
-    if not verify_second_factor(user, data.get("code")):
-        raise ApiError(403, "invalid_mfa_code", "Invalid authentication code")
+    _require_second_factor(data)
     user.totp_secret = None
     user.totp_last_step = None
     user.recovery_codes = None

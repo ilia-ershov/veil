@@ -3,7 +3,7 @@ import time
 import pyotp
 import pytest
 
-from conftest import PASSWORD, auth, register
+from conftest import PASSWORD, auth, outbox, register, verify_email
 
 
 def code_at(secret, offset_steps=0):
@@ -143,3 +143,41 @@ def test_wrong_2fa_codes_are_limited_per_account_across_ips(app_factory):
         for i in range(11)
     ]
     assert statuses == [401] * 10 + [429]
+
+
+def change_email(client, token, code=None, email="new@example.com"):
+    body = {"email": email, "verification_token": verify_email(client, client.application, email, "change_email")}
+    body["password"] = PASSWORD
+    if code is not None:
+        body["code"] = code
+    return client.post("/api/account/email", headers=auth(token), json=body)
+
+
+def test_changing_the_main_address_needs_the_second_factor(client, mfa_user):
+    token, secret, _ = mfa_user
+    for code in (None, "000000"):
+        response = change_email(client, token, code)
+        assert response.status_code == 403
+        assert response.get_json()["code"] == "invalid_mfa_code"
+    assert client.get("/api/account", headers=auth(token)).get_json()["user"]["email"] == "mfa@example.com"
+
+    response = change_email(client, token, code_at(secret, 1))
+    assert response.status_code == 200
+    assert response.get_json()["user"]["email"] == "new@example.com"
+    assert any(m["to"] == "mfa@example.com" and "new@example.com" in m["body"] for m in outbox(client.application))
+
+
+def test_a_recovery_code_changes_the_main_address_once(client, mfa_user):
+    token, _, recovery_codes = mfa_user
+    response = change_email(client, token, recovery_codes[0])
+    assert response.status_code == 200
+    assert response.get_json()["user"]["recovery_codes_left"] == 9
+    again = change_email(client, token, recovery_codes[0], email="other@example.com")
+    assert again.status_code == 403
+
+
+def test_a_failed_change_does_not_use_up_the_code(client, mfa_user):
+    token, _, recovery_codes = mfa_user
+    body = {"email": "new@example.com", "verification_token": "bad", "password": PASSWORD, "code": recovery_codes[0]}
+    assert client.post("/api/account/email", headers=auth(token), json=body).status_code == 400
+    assert change_email(client, token, recovery_codes[0]).status_code == 200

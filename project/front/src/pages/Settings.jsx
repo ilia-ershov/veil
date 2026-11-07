@@ -57,6 +57,7 @@ function ChangeEmail({ user, onUser }) {
   const [email, setEmail] = useState('')
   const [verification, setVerification] = useState('')
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
@@ -73,12 +74,15 @@ function ChangeEmail({ user, onUser }) {
     if (!verification) return setError('Подтвердите новый адрес кодом из письма.')
     setBusy(true)
     try {
-      const result = await accountApi.changeEmail({ email: email.trim(), verification_token: verification, password })
+      const payload = { email: email.trim(), verification_token: verification, password }
+      if (user.mfa_enabled) payload.code = code.trim()
+      const result = await accountApi.changeEmail(payload)
       onUser(result.user)
       setDone(`Основной адрес изменён на ${result.user.email}. Уведомление отправлено на прежний адрес.`)
       setEmail('')
       setVerification('')
       setPassword('')
+      setCode('')
     } catch (err) {
       setError(errorMessage(err, 'Не удалось изменить адрес.'))
       if (err.response?.data?.code === 'invalid_verification') setVerification('')
@@ -104,6 +108,12 @@ function ChangeEmail({ user, onUser }) {
           onVerified={setVerification}
         />
         <PasswordField label="Текущий пароль" value={password} onChange={setPassword} autoComplete="current-password" />
+        {user.mfa_enabled && (
+          <div className="field">
+            <label htmlFor="email-change-code">Код из приложения или код восстановления</label>
+            <input id="email-change-code" autoComplete="one-time-code" value={code} maxLength={20} onChange={(e) => setCode(e.target.value)} required />
+          </div>
+        )}
         <Notice type="success">{done}</Notice>
         <Notice>{error}</Notice>
         <button type="submit" className="button button-primary" disabled={busy || !verification}>
