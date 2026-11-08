@@ -1,14 +1,13 @@
 """Schema creation/upgrade and the one-off migration from the original (legacy) schema."""
 
-import re
 from uuid import uuid4
 
 from sqlalchemy import insert, inspect, select, text
 
 from errors import ApiError
 from extensions import db
-from models import Alias, EmailVerification, utcnow
-from validation import MAX_SERVICE_LENGTH, normalize_service_url
+from models import Alias, EmailVerification, RetiredAlias, utcnow
+from validation import ALIAS_LOCAL_PART_RE, MAX_SERVICE_LENGTH, normalize_service_url
 
 # Columns added to the pre-existing `users` table; create_all() never alters existing tables.
 USER_COLUMNS = {
@@ -18,7 +17,6 @@ USER_COLUMNS = {
     "recovery_codes": "recovery_codes JSON",
 }
 LEGACY_TABLES = (("emails", True), ("deactivated", False))
-LOCAL_PART_RE = re.compile(r"^[a-z0-9]{1,64}$")
 
 
 def init_db():
@@ -57,7 +55,7 @@ def _parse_legacy(data):
     else:
         return None
     local = str(local or "").strip().lower()
-    if not LOCAL_PART_RE.match(local):
+    if not ALIAS_LOCAL_PART_RE.fullmatch(local):
         return None
     service = (str(service or "").strip() or "Без названия")[:MAX_SERVICE_LENGTH]
     try:
@@ -70,8 +68,9 @@ def _parse_legacy(data):
 def migrate_legacy(drop=False, force=False):
     """Copy aliases from the legacy `emails`/`deactivated` tables into `aliases`.
 
-    Runs in one transaction: on any error nothing changes. Re-running is safe (already
-    migrated addresses are skipped). With drop=True the legacy tables are removed afterwards.
+    Runs in one transaction: on any error nothing changes. Re-running is safe: addresses that
+    were already migrated are skipped, and so are those deleted since (they stay retired).
+    With drop=True the legacy tables are removed afterwards.
     """
     init_db()
     tables = set(inspect(db.engine).get_table_names())
@@ -80,6 +79,7 @@ def migrate_legacy(drop=False, force=False):
         "email_conflicts": [],
         "copied": 0,
         "already_present": 0,
+        "deleted_since": 0,
         "owner_conflicts": [],
         "skipped": [],
     }
@@ -102,6 +102,7 @@ def migrate_legacy(drop=False, force=False):
 
         # 2. Copy aliases.
         owners = dict(connection.execute(select(Alias.local_part, Alias.user_id)).all())
+        retired = set(connection.execute(select(RetiredAlias.local_part)).scalars())
         now = utcnow()
         for table, active in LEGACY_TABLES:
             if table not in tables:
@@ -112,6 +113,9 @@ def migrate_legacy(drop=False, force=False):
                     report["skipped"].append({"table": table, "user_id": str(user_id), "data": data})
                     continue
                 local, service, url = parsed
+                if local in retired:  # deleted by its owner after an earlier run: never bring it back
+                    report["deleted_since"] += 1
+                    continue
                 if local in owners:
                     # The old API let the same signed address be added repeatedly, even by different users.
                     if owners[local] != user_id:

@@ -6,20 +6,24 @@ import Notice from './Notice'
 
 const RESEND_SECONDS = 60
 
-const secondsFromNow = (seconds) => Date.now() + seconds * 1000
-
-function useSecondsUntil(deadline) {
-  const [now, setNow] = useState(() => Date.now())
+// [seconds left, start(seconds)]. Starting also resets "now", so the first value shown is right
+// even when the page has been open for a while.
+function useCountdown() {
+  const [{ deadline, now }, setClock] = useState({ deadline: 0, now: 0 })
   useEffect(() => {
     if (!deadline) return undefined
     const timer = setInterval(() => {
       const current = Date.now()
-      setNow(current)
+      setClock((clock) => ({ ...clock, now: current }))
       if (current >= deadline) clearInterval(timer)
     }, 500)
     return () => clearInterval(timer)
   }, [deadline])
-  return Math.max(0, Math.ceil((deadline - now) / 1000))
+  const start = (seconds) => {
+    const current = Date.now()
+    setClock({ deadline: current + seconds * 1000, now: current })
+  }
+  return [Math.max(0, Math.ceil((deadline - now) / 1000)), start]
 }
 
 /**
@@ -33,8 +37,7 @@ export default function EmailVerificationField({ label, purpose, email, onEmailC
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [resendAt, setResendAt] = useState(0)
-  const secondsLeft = useSecondsUntil(resendAt)
+  const [secondsLeft, startCountdown] = useCountdown()
 
   const normalized = email.trim().toLowerCase()
   const codeSent = sentTo !== '' && sentTo === normalized
@@ -51,13 +54,13 @@ export default function EmailVerificationField({ label, purpose, email, onEmailC
       await authApi.requestCode(normalized, purpose)
       setSentTo(normalized)
       setCode('')
-      setResendAt(secondsFromNow(RESEND_SECONDS))
+      startCountdown(RESEND_SECONDS)
     } catch (err) {
       setError(errorMessage(err))
       const retryAfter = err.response?.data?.retry_after
       if (retryAfter) {
         setSentTo(normalized) // a code was already sent a moment ago
-        setResendAt(secondsFromNow(retryAfter))
+        startCountdown(retryAfter)
       }
     } finally {
       setBusy(false)

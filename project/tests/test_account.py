@@ -98,3 +98,35 @@ def test_delete_account_removes_everything(client, app):
     # the addresses stay reserved, without any link to the deleted account
     assert {r.local_part for r in db.session.query(RetiredAlias)} == gone
     assert any(m["to"] == "gone@example.com" and "удалён" in m["subject"] for m in outbox(app))
+
+
+def test_wrong_password_reentries_are_limited_per_account_across_ips(app_factory):
+    app = app_factory(RATELIMIT_ENABLED=True)
+    client = app.test_client()
+    token = register(client, app)
+
+    def from_ip(i):
+        return {"headers": auth(token), "environ_base": {"REMOTE_ADDR": f"198.51.100.{i}"}}
+
+    wrong_delete = {"password": "Wrong-pass1"}
+    wrong_change = {"current_password": "Wrong-pass1", "new_password": "An0ther-pass!"}
+    statuses = [
+        client.delete("/api/account", json=wrong_delete, **from_ip(i)).status_code
+        if i % 2
+        else client.post("/api/account/password", json=wrong_change, **from_ip(i)).status_code
+        for i in range(20)
+    ]
+    assert statuses == [403] * 20
+    # one counter for every endpoint that asks for the password; it holds even for the right one
+    response = client.delete("/api/account", json={"password": PASSWORD}, **from_ip(99))
+    assert response.status_code == 429
+    assert db.session.query(User).count() == 1
+
+    other = register(client, app, email="other@example.com")
+    response = client.post(
+        "/api/account/password",
+        headers=auth(other),
+        json={"current_password": PASSWORD, "new_password": "An0ther-pass!"},
+        environ_base={"REMOTE_ADDR": "198.51.100.98"},
+    )
+    assert response.status_code == 200  # other accounts are unaffected

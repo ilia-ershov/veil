@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { accountApi, aliasApi } from '../api'
 import AliasItem from '../components/AliasItem'
 import Notice from '../components/Notice'
 import SearchBox from '../components/SearchBox'
+import { useFlashMessage } from '../flash'
 import { matchesQuery } from '../format'
 import { errorMessage } from '../messages'
 
 export default function Dashboard() {
-  const location = useLocation()
+  const created = useFlashMessage('created')
   const [user, setUser] = useState(null)
   const [aliases, setAliases] = useState(null) // null while loading
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState(location.state?.created ? `Адрес ${location.state.created} создан.` : '')
+  const [notice, setNotice] = useState(created ? `Адрес ${created} создан.` : '')
 
   useEffect(() => {
     let cancelled = false

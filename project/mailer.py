@@ -3,12 +3,21 @@
 import logging
 import smtplib
 import ssl
+from datetime import UTC, datetime
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import format_datetime, make_msgid
 
 from flask import current_app
 
 log = logging.getLogger(__name__)
+
+
+def notify(to, subject, body):
+    """Security notifications are best effort: a mail outage must not undo the change they report."""
+    try:
+        send_email(to, subject, body)
+    except Exception:
+        log.exception("Could not send notification email")
 
 
 def send_email(to, subject, body):
@@ -28,7 +37,7 @@ def send_email(to, subject, body):
     message["Subject"] = subject
     # Required by RFC 5322; Gmail rejects mail without a Message-ID, and the relay
     # does not add them for mail coming from the app's network.
-    message["Date"] = formatdate(localtime=False)
+    message["Date"] = format_datetime(datetime.now(UTC))  # "+0000": RFC 5322's form for UTC
     message["Message-ID"] = make_msgid(domain=config["MAIL_FROM"].rpartition("@")[2] or None)
     message.set_content(body)
 

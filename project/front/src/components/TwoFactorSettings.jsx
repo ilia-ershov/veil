@@ -88,7 +88,7 @@ export default function TwoFactorSettings({ user, onUser }) {
             Скачать .txt
           </button>
           <button type="button" className="button button-primary" onClick={() => setRecoveryCodes([])}>
-            Я сохранил коды
+            Коды сохранены
           </button>
         </div>
       </section>

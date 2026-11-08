@@ -13,7 +13,7 @@
 ## Run
 
 ```bash
-git clone https://github.com/ilia-ershov/iershov_application && cd iershov_application
+git clone https://github.com/ilia-ershov/veil && cd veil
 cp deploy/server.env.example deploy/server.env     # set domain, IP, forwarding address...
 sudo ./deploy/server-setup.sh                       # or individual steps: sudo ./deploy/server-setup.sh app caddy
 ```
@@ -29,7 +29,7 @@ At the end the script prints the DNS records to create.
 | `lookup_role` | Read-only DB role for Postfix (5 columns, no password hashes or 2FA secrets) |
 | `site` | Personal page on the root domain (`deploy/site/index.html`) |
 | `caddy` | HTTPS for the root domain, `www`, the service and `mail.` (Let's Encrypt, automatic renewal) |
-| `postfix` | Receives mail for both domains; active aliases from the DB, personal addresses from `/etc/postfix/virtual`; no open relay; postscreen with Spamhaus/SpamCop; SPF check of incoming mail |
+| `postfix` | Receives mail for both domains; active aliases from the DB, personal addresses from `/etc/postfix/virtual` (mail for root goes to the first one); no open relay; postscreen with Spamhaus/SpamCop; SPF check of incoming mail |
 | `srs` | Forwarded mail gets an SRS envelope sender so it passes SPF at the destination |
 | `dkim` | 2048-bit keys; signs the server's own mail (codes, notifications) |
 | `resolver` | unbound on 127.0.0.1 (Spamhaus refuses queries through public resolvers) |
@@ -37,7 +37,7 @@ At the end the script prints the DNS records to create.
 | `fail2ban` | Bans SSH/SMTP brute force (your IPs from `F2B_IGNORE` are never banned) |
 | `updates` | Daily automatic security updates, no automatic reboot |
 | `ssh` | Key-only SSH (skipped if no key is installed) |
-| `backup` | Daily backup at 04:30 of the database, secrets and config, kept for 14 days (`deploy/backup.sh`) |
+| `backup` | Daily backup at 04:30 of the database, secrets and config, kept for 14 days (`deploy/backup.sh`); a failed run is mailed to root |
 | `summary` | Prints the DNS records (incl. DKIM) and the PTR request for the provider |
 
 ## Outside the server
@@ -56,10 +56,10 @@ Certificates are issued as soon as the A records resolve. If `postfix_tls` ran t
 | File | Contents |
 | --- | --- |
 | `db.dump` | The app database (`pg_dump` custom format, checked with `pg_restore --list` right after dumping) |
-| `files.tar.gz` | `.env`, `docker-compose.override.yml`, `deploy/server.env`, DKIM keys and tables, `/etc/postsrsd.secret`, Postfix, OpenDKIM and Caddy config |
+| `files.tar.gz` | `.env`, `docker-compose.override.yml`, `deploy/server.env`, DKIM keys and tables, `/etc/postsrsd.secret`, Postfix, OpenDKIM, Caddy, SSH and fail2ban config, `/etc/aliases`, and the websites in `/var/www` |
 | `SHA256SUMS` | Checksums of both |
 
-`latest` points to the newest run; runs older than 14 days are deleted. A backup that lives only on the server is lost together with it, so copy it off regularly. It contains secrets, so keep the copy encrypted:
+`latest` points to the newest run; runs older than 14 days are deleted. A run that fails leaves no directory behind, and the failure is mailed to root. A backup that lives only on the server is lost together with it, so copy it off regularly. It contains secrets, so keep the copy encrypted:
 
 ```bash
 scp -r root@SERVER:/var/backups/mail-organizer/latest/ ./mail-organizer-backup
@@ -74,8 +74,9 @@ Restore the latest backup so that DNS records (DKIM) and accounts stay valid:
 ```bash
 # on the new server, after cloning the repo into the same path
 sha256sum -c SHA256SUMS
-# secrets only: the script writes the config itself (the archive's copies are for reference)
-tar -xzf files.tar.gz -C / --wildcards '*/.env' 'etc/opendkim/keys' 'etc/postsrsd.secret'
+# secrets, settings and the websites: the script writes the rest of the config itself (the archive's
+# copies, e.g. of the SSH and fail2ban config, are for reference and for anything changed by hand)
+tar -xzf files.tar.gz -C / --wildcards '*/.env' '*/deploy/server.env' 'etc/opendkim/keys' 'etc/postsrsd.secret' 'var/www'
 sudo ./deploy/server-setup.sh                       # keeps the existing .env and DKIM keys
 docker compose exec -T db pg_restore -U mail_organizer -d mail_organizer --clean --if-exists < db.dump
 sudo ./deploy/server-setup.sh lookup_role           # re-grant the Postfix lookup role

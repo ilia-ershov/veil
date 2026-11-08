@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG VITE_MAIL_DOMAIN=w3r4kl.ru
+ARG VITE_MAIL_DOMAIN=veil.ershov.me
 RUN npm run build
 
 FROM nginx:1.29-alpine

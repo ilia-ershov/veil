@@ -159,7 +159,7 @@ def test_complete_user_journey(base_url, browser_page, mailbox, new_email):
         page.get_by_role("button", name="Включить", exact=True).click()
         expect(page.locator(".codes code")).to_have_count(10)
         recovery_codes = page.locator(".codes code").all_inner_texts()
-        page.get_by_role("button", name="Я сохранил коды").click()
+        page.get_by_role("button", name="Коды сохранены").click()
         expect(page.get_by_text("Осталось кодов восстановления: 10.")).to_be_visible()
 
     with step(page, "log in again: wrong password, replayed TOTP code, recovery code"):
@@ -189,6 +189,7 @@ def test_complete_user_journey(base_url, browser_page, mailbox, new_email):
         section.get_by_label("Код из письма").fill(read_code())
         section.get_by_role("button", name="Подтвердить").click()
         section.get_by_label("Текущий пароль").fill(PASSWORD)
+        section.get_by_label("Код из приложения или код восстановления").fill(recovery_codes[2])  # 2FA is on
         section.get_by_role("button", name="Сменить адрес").click()
         expect(section.get_by_text(f"Основной адрес изменён на {new_address}.")).to_be_visible()
         wait_for(mailbox, is_notice, before=notices_before)  # the old address is told about the change

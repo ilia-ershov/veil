@@ -1,7 +1,29 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clearToken, isLoggedIn } from '../auth'
 import { MAIL_DOMAIN } from '../config'
+import PageErrorBoundary from './PageErrorBoundary'
+
+const APP_NAME = 'Организатор почты'
+
+// Tab titles (and so browser history and bookmarks) name the page; '' is the home page.
+const TITLES = {
+  '/': '',
+  '/login': 'Вход',
+  '/signup': 'Регистрация',
+  '/reset-password': 'Восстановление пароля',
+  '/dashboard': 'Мои адреса',
+  '/create': 'Новый адрес',
+  '/deactivated': 'Отключённые адреса',
+  '/settings': 'Настройки',
+  '/help': 'Справка',
+}
+
+function pageTitle(pathname) {
+  const page = TITLES[pathname.replace(/\/+$/, '') || '/']
+  if (page === undefined) return `Страница не найдена · ${APP_NAME}`
+  return page ? `${page} · ${APP_NAME}` : APP_NAME
+}
 
 const PRIVATE_LINKS = [
   { to: '/dashboard', label: 'Адреса' },
@@ -25,6 +47,10 @@ export default function Layout() {
   // the mobile menu closes itself on navigation
   const menuOpen = menu.open && menu.path === location.pathname
 
+  useEffect(() => {
+    document.title = pageTitle(location.pathname)
+  }, [location.pathname])
+
   const logout = () => {
     clearToken()
     navigate('/login')
@@ -39,7 +65,7 @@ export default function Layout() {
               <rect x="2.5" y="5" width="19" height="14" rx="2" />
               <path d="m3 6.5 9 6.5 9-6.5" />
             </svg>
-            Организатор почты
+            {APP_NAME}
             <span className="brand-domain">{MAIL_DOMAIN}</span>
           </Link>
           <button
@@ -69,14 +95,17 @@ export default function Layout() {
         </div>
       </header>
       <main className="main">
-        <Suspense fallback={<p className="muted">Загрузка…</p>}>
-          <Outlet />
-        </Suspense>
+        {/* keyed by page: after a failure, going to another page starts afresh */}
+        <PageErrorBoundary key={location.pathname}>
+          <Suspense fallback={<p className="muted">Загрузка…</p>}>
+            <Outlet />
+          </Suspense>
+        </PageErrorBoundary>
       </main>
       <footer className="footer">
         <div className="footer-inner">
           <span>Адреса для регистрации на сайтах без раскрытия основной почты</span>
-          <a href="https://github.com/ilia-ershov/iershov_application">Исходный код</a>
+          <a href="https://github.com/ilia-ershov/veil">Исходный код</a>
         </div>
       </footer>
     </div>

@@ -1,17 +1,18 @@
 """The signed-in user's account: profile, main address, password, 2FA and deletion."""
 
-import logging
-
 import jwt
 from flask import Blueprint, current_app, g, jsonify
+from flask_limiter.util import get_remote_address
 from sqlalchemy.exc import IntegrityError
 
 from errors import ApiError, bad_request, conflict
 from extensions import db, limiter
-from mailer import send_email
+from mailer import notify
 from models import User
 from security import (
+    ACCESS,
     TOTP_SETUP,
+    bearer_token,
     check_verification_token,
     create_token,
     decode_token,
@@ -31,21 +32,42 @@ from .aliases import retire
 from .auth import failed_auth
 
 bp = Blueprint("account", __name__, url_prefix="/account")
-log = logging.getLogger(__name__)
 
 
-def _notify(to, subject, body):
-    """Security notifications are best effort: a mail outage must not undo the change."""
+def wrong_secret(response):
+    return response.status_code == 403  # wrong password or 2FA code (see _require_password)
+
+
+# A stolen session must not turn into a password-guessing oracle: knowing the password unlocks
+# moving the main address, i.e. all forwarded mail. Wrong re-entries are counted per account,
+# whichever addresses they come from (the per-IP limit alone does not stop a botnet).
+def session_account_key():
     try:
-        send_email(to, subject, body)
-    except Exception:
-        log.exception("Could not send notification email")
+        claims = decode_token(bearer_token(), ACCESS)
+    except jwt.InvalidTokenError:
+        return get_remote_address()
+    return f"session-account:{claims['sub']}"
+
+
+per_account_reentry = limiter.shared_limit(
+    "20 per hour", scope="password-reentry", key_func=session_account_key, deduct_when=wrong_secret
+)
 
 
 def _require_password(data, field="password"):
     # 403, not 401: a wrong password here must not look like an expired session to the client.
     if not verify_password(data.get(field), g.user.password_hash):
         raise ApiError(403, "invalid_password", "Wrong password", field=field)
+
+
+def _require_second_factor(data):
+    """With 2FA on, a fresh TOTP or recovery code is needed too: a password alone (phished, or typed
+    on someone else's computer) must not be enough to move all forwarded mail. The code is used up
+    only if the change is committed."""
+    user = g.user
+    db.session.refresh(user, with_for_update=True)  # parallel requests cannot reuse one code
+    if not verify_second_factor(user, data.get("code")):
+        raise ApiError(403, "invalid_mfa_code", "Invalid authentication code", field="code")
 
 
 @bp.get("")
@@ -56,10 +78,13 @@ def get_account():
 
 @bp.post("/email")
 @limiter.limit("10 per minute", deduct_when=failed_auth)
+@per_account_reentry
 @login_required
 def change_email():
     data = get_json()
     _require_password(data)
+    if g.user.mfa_enabled:
+        _require_second_factor(data)
     email = require_external_email(normalize_email(data.get("email")))
     check_verification_token(data.get("verification_token"), email, "change_email")
 
@@ -76,7 +101,7 @@ def change_email():
         db.session.rollback()
         raise conflict("email_taken", "An account with this email already exists")
 
-    _notify(
+    notify(
         old_email,
         "Основной адрес изменён",
         f"Основной адрес вашего аккаунта на {current_app.config['MAIL_DOMAIN']} изменён на {email}. "
@@ -88,6 +113,7 @@ def change_email():
 
 @bp.post("/password")
 @limiter.limit("10 per minute", deduct_when=failed_auth)
+@per_account_reentry
 @login_required
 def change_password():
     data = get_json()
@@ -97,7 +123,7 @@ def change_password():
     user.password_hash = hash_password(password)
     user.token_version += 1  # every other session is signed out
     db.session.commit()
-    _notify(
+    notify(
         user.email, "Пароль изменён", "Пароль вашего аккаунта был изменён. Если это были не вы, восстановите пароль."
     )
     return jsonify(token=issue_access_token(user), user=user.to_dict())
@@ -113,6 +139,7 @@ def logout_everywhere():
 
 @bp.delete("")
 @limiter.limit("10 per minute", deduct_when=failed_auth)
+@per_account_reentry
 @login_required
 def delete_account():
     data = get_json()
@@ -121,7 +148,7 @@ def delete_account():
     retire(list(g.user.aliases))
     db.session.delete(g.user)
     db.session.commit()
-    _notify(
+    notify(
         email,
         "Аккаунт удалён",
         f"Ваш аккаунт на {current_app.config['MAIL_DOMAIN']} удалён, все его адреса отключены "
@@ -168,12 +195,13 @@ def enable_2fa():
     user.totp_last_step = step
     user.recovery_codes = hashes
     db.session.commit()
-    _notify(user.email, "Двухфакторная аутентификация включена", "Для входа в аккаунт теперь нужен код из приложения.")
+    notify(user.email, "Двухфакторная аутентификация включена", "Для входа в аккаунт теперь нужен код из приложения.")
     return jsonify(user=user.to_dict(), recovery_codes=codes)
 
 
 @bp.post("/2fa/disable")
 @limiter.limit("10 per minute", deduct_when=failed_auth)
+@per_account_reentry
 @login_required
 def disable_2fa():
     data = get_json()
@@ -181,11 +209,10 @@ def disable_2fa():
     user = g.user
     if not user.mfa_enabled:
         return jsonify(user=user.to_dict())
-    if not verify_second_factor(user, data.get("code")):
-        raise ApiError(403, "invalid_mfa_code", "Invalid authentication code")
+    _require_second_factor(data)
     user.totp_secret = None
     user.totp_last_step = None
     user.recovery_codes = None
     db.session.commit()
-    _notify(user.email, "Двухфакторная аутентификация отключена", "Если это сделали не вы, срочно смените пароль.")
+    notify(user.email, "Двухфакторная аутентификация отключена", "Если это сделали не вы, срочно смените пароль.")
     return jsonify(user=user.to_dict())

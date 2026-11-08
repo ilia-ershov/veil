@@ -18,7 +18,7 @@ def test_create_and_list_aliases_newest_first(client, app):
     first = create_alias(client, token, service="GitHub", service_url="github.com")
     second = create_alias(client, token, service="Shop", service_url="")
 
-    assert first["address"] == f"{first['alias']}@w3r4kl.ru"
+    assert first["address"] == f"{first['alias']}@{app.config['MAIL_DOMAIN']}"
     assert first["service_url"] == "https://github.com"
     assert len(first["alias"]) == 10 and first["alias"].isalnum()
 

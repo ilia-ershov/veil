@@ -105,14 +105,20 @@ def check_verification_token(token, email, purpose):
     return claims
 
 
+def bearer_token():
+    """The token from an `Authorization: Bearer <token>` header, or "" when there is none."""
+    scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" else ""
+
+
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
-        scheme, _, token = request.headers.get("Authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or not token.strip():
+        token = bearer_token()
+        if not token:
             raise unauthorized("token_missing", "Authorization token is missing")
         try:
-            claims = decode_token(token.strip(), ACCESS)
+            claims = decode_token(token, ACCESS)
             user_id = UUID(claims["sub"])
         except jwt.ExpiredSignatureError:
             raise unauthorized("token_expired", "Token has expired")

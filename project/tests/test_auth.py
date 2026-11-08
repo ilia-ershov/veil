@@ -165,6 +165,7 @@ def test_resend_cooldown(app_factory):
     assert response.status_code == 429
     assert response.get_json()["code"] == "resend_too_soon"
     assert 0 < response.get_json()["retry_after"] <= 60
+    assert response.headers["Retry-After"] == str(response.get_json()["retry_after"])
 
 
 def test_code_request_does_not_reveal_registered_addresses(client, app):
@@ -232,8 +233,11 @@ def test_ordinary_addresses_are_accepted(client, email):
     assert client.post("/api/auth/request-code", json={"email": email}).status_code == 200
 
 
-def test_alias_domain_cannot_be_main_address(client):
-    response = client.post("/api/auth/request-code", json={"email": "abc@w3r4kl.ru"})
+@pytest.mark.parametrize("address", ["abc@{domain}", "abc@sub.{domain}", "ABC@{domain_upper}"])
+def test_alias_domain_cannot_be_main_address(client, app, address):
+    domain = app.config["MAIL_DOMAIN"]
+    email = address.format(domain=domain, domain_upper=domain.upper())
+    response = client.post("/api/auth/request-code", json={"email": email})
     assert response.status_code == 400
     assert response.get_json()["code"] == "alias_domain_email"
 
@@ -259,6 +263,18 @@ def test_password_reset_signs_out_existing_sessions(client, app):
     assert (
         client.post("/api/auth/login", json={"email": "a@example.com", "password": "N3w-password"}).status_code == 200
     )
+
+
+def test_password_reset_is_reported_to_the_account_address(client, app):
+    register(client, app, email="a@example.com")
+    token = verify_email(client, app, "a@example.com", purpose="reset_password")
+    outbox(app).clear()
+    response = client.post(
+        "/api/auth/reset-password",
+        json={"email": "a@example.com", "password": "N3w-password", "verification_token": token},
+    )
+    assert response.status_code == 200
+    assert [m["subject"] for m in outbox(app) if m["to"] == "a@example.com"] == ["Пароль сброшен"]
 
 
 def test_password_reset_token_works_once(client, app):
